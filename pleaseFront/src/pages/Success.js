@@ -6,10 +6,14 @@ import {
 } from 'react-bootstrap';
 import { CheckCircleFill, ClockHistory } from 'react-bootstrap-icons';
 import axios from 'axios';
+import Confetti from 'react-confetti';
+import { useWindowSize } from 'react-use';
 
 const Success = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { width, height } = useWindowSize();
+
   const [state, setState] = useState({
     loading: true,
     error: null,
@@ -76,12 +80,12 @@ const Success = () => {
   if (state.error) {
     return (
       <Container className="py-5 d-flex justify-content-center">
-        <Card className="shadow-lg p-4" style={{ maxWidth: '500px', width: '100%' }}>
-          <Alert variant="danger" className="text-center mb-4">
-            <Alert.Heading className="fw-bold">Payment Verification Failed</Alert.Heading>
+        <Card className="shadow-lg p-4 border-0 rounded-3" style={{ maxWidth: '500px', width: '100%' }}>
+          <Alert variant="danger" className="text-center mb-4 rounded">
+            <Alert.Heading className="fw-bold">❌ Payment Verification Failed</Alert.Heading>
             <p className="fw-semibold">{state.error}</p>
           </Alert>
-          <div className="d-flex justify-content-between">
+          <div className="d-flex gap-3 justify-content-center">
             <Button variant="outline-danger" onClick={() => navigate('/pricing')}>
               Back to Pricing
             </Button>
@@ -96,72 +100,72 @@ const Success = () => {
   }
 
   return (
-    <Container className="py-5 d-flex justify-content-center">
-      <Card 
-        className="shadow-lg border-0"
-        style={{
-          maxWidth: '600px', 
-          width: '100%', 
-          borderRadius: '20px', 
-          overflow: 'hidden'
-        }}
-      >
-        {/* Top Blue Header */}
-        <div 
-          style={{
-            background: 'linear-gradient(135deg, #007bff, #0056b3)',
-            padding: '2rem',
-            color: 'white'
-          }}
-          className="text-center"
+    <>
+      {/* 🎉 Confetti Animation */}
+      <Confetti width={width} height={height} recycle={false} numberOfPieces={400} />
+
+      <Container className="py-5 d-flex justify-content-center">
+        <Card 
+          className="shadow-lg border-0 rounded-4 overflow-hidden text-center"
+          style={{ maxWidth: '650px', width: '100%' }}
         >
-          <CheckCircleFill size={60} className="mb-3" />
-          <h2 className="fw-bold">Payment Successful</h2>
-          <p className="mb-0 fs-5 fw-semibold">Your {state.payment.plan} plan is now active</p>
-        </div>
-
-        <Card.Body className="p-4">
-          <ListGroup variant="flush" className="mb-4">
-            <ListGroup.Item className="py-3 fs-6 fw-semibold">
-              Payment ID: <span className="text-dark">{state.payment.id || 'N/A'}</span>
-            </ListGroup.Item>
-            <ListGroup.Item className="py-3 fs-6 fw-semibold">
-              Amount Paid: <span className="text-primary">{state.payment.amount} {state.payment.currency}</span>
-            </ListGroup.Item>
-            <ListGroup.Item className="py-3 fs-6 fw-semibold">
-              Plan: <span className="text-dark">{state.payment.plan} ({state.payment.period})</span>
-            </ListGroup.Item>
-            {state.payment.nextBilling && (
-              <ListGroup.Item className="py-3 fs-6 fw-semibold">
-                Next Billing Date: <span className="text-dark">{new Date(state.payment.nextBilling).toLocaleDateString()}</span>
-              </ListGroup.Item>
-            )}
-            <ListGroup.Item className="py-3 fs-6 fw-semibold">
-              Status: <span style={{ color: state.payment.status === 'paid' ? 'green' : 'orange' }}>
-                {state.payment.status}
-              </span>
-            </ListGroup.Item>
-          </ListGroup>
-
-          <div className="text-center">
-            <Button 
-              variant="primary" 
-              size="lg"
-              className="px-5 fw-bold"
-              style={{
-                borderRadius: '50px',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={e => e.target.style.backgroundColor = '#0056b3'}
-              onMouseLeave={e => e.target.style.backgroundColor = '#007bff'}
-              onClick={() => navigate('/dashboard')}
-            >
-              Go to Dashboard
-            </Button>
+          {/* Gradient Header */}
+          <div className="bg-primary text-white py-5 px-4 position-relative">
+            <CheckCircleFill size={65} className="mb-3" />
+            <h2 className="fw-bold mb-2">Payment Successful 🎉</h2>
+            <p className="mb-0 fs-5 fw-semibold">
+              Your <span className="text-warning">{state.payment.plan}</span> plan is now active
+            </p>
           </div>
-        </Card.Body>
-      </Card>
-    </Container>
+
+          <Card.Body className="p-4">
+            <ListGroup variant="flush" className="mb-4">
+              <ListGroup.Item className="py-3 fs-6 fw-semibold">
+                Payment ID:&nbsp;
+                <span className="text-dark">{state.payment.id || 'N/A'}</span>
+              </ListGroup.Item>
+              <ListGroup.Item className="py-3 fs-6 fw-semibold">
+                Amount Paid:&nbsp; 
+                <span className="text-primary fw-bold">
+                  {state.payment.amount} {state.payment.currency}
+                </span>
+              </ListGroup.Item>
+              <ListGroup.Item className="py-3 fs-6 fw-semibold">
+                Plan:&nbsp; 
+                <span className="text-dark">
+                  {state.payment.plan} ({state.payment.period})
+                </span>
+              </ListGroup.Item>
+              {state.payment.nextBilling && (
+                <ListGroup.Item className="py-3 fs-6 fw-semibold">
+                  Next Billing Date:&nbsp; 
+                  <span className="text-dark">
+                    {new Date(state.payment.nextBilling).toLocaleDateString()}
+                  </span>
+                </ListGroup.Item>
+              )}
+              <ListGroup.Item className="py-3 fs-6 fw-semibold">
+                Status:&nbsp; 
+                <span className={state.payment.status === 'paid' ? "text-success fw-bold" : "text-warning fw-bold"}>
+                  {state.payment.status}
+                </span>
+              </ListGroup.Item>
+            </ListGroup>
+
+            <div className="text-center">
+              <Button 
+                variant="primary"
+                size="lg"
+                className="px-5 fw-bold rounded-pill"
+                onClick={() => navigate('/dashboard')}
+              >
+                Go to Dashboard
+              </Button>
+            </div>
+          </Card.Body>
+        </Card>
+      </Container>
+    </>
   );
 };
 

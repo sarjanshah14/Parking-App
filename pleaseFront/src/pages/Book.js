@@ -106,11 +106,13 @@ const Book = () => {
     name: '',
     phone: '',
     duration: '1',
+    bookingDateTime: ''
   });
   const [errors, setErrors] = useState({
     name: '',
     phone: '',
     duration: '',
+    bookingDateTime: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [userLocation, setUserLocation] = useState(null);
@@ -157,12 +159,31 @@ const Book = () => {
     return `${phoneNumber.slice(0, 5)} ${phoneNumber.slice(5, 10)}`;
   };
 
+  // Function to get minimum datetime for input (current time + 30 minutes)
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 30); // Allow booking from 30 minutes from now
+    return now.toISOString().slice(0, 16);
+  };
+
+  // Function to validate date and time
+  const validateDateTime = (dateTime) => {
+    if (!dateTime) return false;
+    
+    const selectedDate = new Date(dateTime);
+    const now = new Date();
+    
+    // Check if selected date/time is at least 30 minutes from now
+    return selectedDate.getTime() > now.getTime() + 30 * 60 * 1000;
+  };
+
   const validateForm = () => {
     let valid = true;
     const newErrors = {
       name: '',
       phone: '',
       duration: '',
+      bookingDateTime: ''
     };
 
     // Name validation
@@ -189,6 +210,15 @@ const Book = () => {
     // Duration validation
     if (!bookingForm.duration || bookingForm.duration < 1 || bookingForm.duration > 8) {
       newErrors.duration = 'Duration must be between 1-8 hours';
+      valid = false;
+    }
+
+    // Date and time validation
+    if (!bookingForm.bookingDateTime) {
+      newErrors.bookingDateTime = 'Please select a date and time';
+      valid = false;
+    } else if (!validateDateTime(bookingForm.bookingDateTime)) {
+      newErrors.bookingDateTime = 'Please select a time at least 30 minutes from now';
       valid = false;
     }
 
@@ -253,7 +283,8 @@ const Book = () => {
         name: bookingForm.name,
         phone: bookingForm.phone.replace(/\D/g, ''), // Remove non-digits
         duration: bookingForm.duration,
-        total_price: calculateTotalPrice()
+        total_price: calculateTotalPrice(),
+        booking_time: bookingForm.bookingDateTime
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -265,11 +296,12 @@ const Book = () => {
         duration: bookingForm.duration,
         total: calculateTotalPrice(),
         bookingId: response.data.id,
-        phone: bookingForm.phone.replace(/\D/g, '')
+        phone: bookingForm.phone.replace(/\D/g, ''),
+        bookingDateTime: bookingForm.bookingDateTime
       });
 
       setShowSuccessModal(true);
-      setBookingForm({ name: '', phone: '', duration: '1' });
+      setBookingForm({ name: '', phone: '', duration: '1', bookingDateTime: '' });
       setSelectedPremise(null);
 
     } catch (error) {
@@ -549,6 +581,27 @@ const Book = () => {
                             </Form.Control.Feedback>
                           </Form.Group>
 
+                          <Form.Group className="mb-3">
+                            <Form.Label>Start Date & Time</Form.Label>
+                            <Form.Control
+                              type="datetime-local"
+                              value={bookingForm.bookingDateTime}
+                              onChange={(e) => setBookingForm({ 
+                                ...bookingForm, 
+                                bookingDateTime: e.target.value 
+                              })}
+                              isInvalid={!!errors.bookingDateTime}
+                              min={getMinDateTime()}
+                              required
+                            />
+                            <Form.Text className="text-muted">
+                              Select when you want your parking to start (minimum 30 minutes from now)
+                            </Form.Text>
+                            <Form.Control.Feedback type="invalid">
+                              {errors.bookingDateTime}
+                            </Form.Control.Feedback>
+                          </Form.Group>
+
                           <Form.Group className="mb-4">
                             <Form.Label>Duration (hours)</Form.Label>
                             <Form.Select
@@ -604,6 +657,7 @@ const Book = () => {
 
             <div className="booking-details">
               <p><strong>Location:</strong> {bookingSuccessDetails?.premise}</p>
+              <p><strong>Start Time:</strong> {bookingSuccessDetails?.bookingDateTime ? new Date(bookingSuccessDetails.bookingDateTime).toLocaleString() : ''}</p>
               <p><strong>Duration:</strong> {bookingSuccessDetails?.duration} hours</p>
               <p><strong>Total Amount:</strong> ₹{bookingSuccessDetails?.total}</p>
               <p><strong>Booking ID:</strong> {bookingSuccessDetails?.bookingId}</p>

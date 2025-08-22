@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button, Form, Alert } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
+// Add these imports at the top
+import * as d3 from 'd3';
 
 function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,12 +14,64 @@ function AuthPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeField, setActiveField] = useState(""); // track which field is focused
 
   const navigate = useNavigate();
   const primaryColor = "rgb(9, 184, 247)";
 
+  const [validation, setValidation] = useState({
+    username: false,
+    email: false,
+    passwordLength: false,
+    passwordUppercase: false,
+    passwordNumber: false,
+    passwordSpecial: false,
+    confirmPassword: false,
+  });
+
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+
+    if (!isLogin) {
+      switch (name) {
+        case "username":
+          setValidation((prev) => ({ ...prev, username: value.length >= 3 }));
+          break;
+        case "email":
+          setValidation((prev) => ({
+            ...prev,
+            email: /^\S+@\S+\.\S+$/.test(value),
+          }));
+          break;
+        case "password":
+          setValidation((prev) => ({
+            ...prev,
+            passwordLength: value.length >= 8,
+            passwordUppercase: /[A-Z]/.test(value),
+            passwordNumber: /\d/.test(value),
+            passwordSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(value),
+            confirmPassword: value === form.confirmPassword,
+          }));
+          break;
+        case "confirmPassword":
+          setValidation((prev) => ({
+            ...prev,
+            confirmPassword: value === form.password,
+          }));
+          break;
+        default:
+          break;
+      }
+    }
+  };
+
+  const handleFocus = (e) => {
+    setActiveField(e.target.name);
+  };
+
+  const handleBlur = () => {
+    setActiveField("");
   };
 
   const handleSubmit = async (e) => {
@@ -31,15 +85,17 @@ function AuthPage() {
       return;
     }
 
-    if (!isLogin && form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
-      setLoading(false);
-      return;
+    if (!isLogin) {
+      const allValid = Object.values(validation).every((v) => v === true);
+      if (!allValid) {
+        setError("Please meet all signup requirements before continuing.");
+        setLoading(false);
+        return;
+      }
     }
 
     try {
       if (isLogin) {
-        // Login API call
         const res = await fetch("/api/users/login/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -49,22 +105,15 @@ function AuthPage() {
           }),
         });
         const data = await res.json();
-
         if (!res.ok) {
           setError(data.detail || "Login failed.");
           setLoading(false);
           return;
         }
-
-        // Save token in localStorage (or context)
         localStorage.setItem("token", data.access);
         localStorage.setItem("refreshToken", data.refresh);
-
-        // Redirect to dashboard
         navigate("/dashboard");
-
       } else {
-        // Signup API call
         const res = await fetch("/api/users/signup/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -74,14 +123,12 @@ function AuthPage() {
             password: form.password,
           }),
         });
-
         if (res.status === 201) {
-          // Signup successful, switch to login form
           setIsLogin(true);
           setForm({ username: "", email: "", password: "", confirmPassword: "" });
           setError("");
           alert("Signup successful! Please login.");
-          navigate('/dashboard')
+          navigate("/dashboard");
         } else {
           const data = await res.json();
           setError(data.username ? data.username[0] : "Signup failed.");
@@ -94,14 +141,25 @@ function AuthPage() {
     setLoading(false);
   };
 
+  // Bulleted list for a field's validation with color
+  const renderBulletList = (rules) => (
+    <ul style={{ paddingLeft: "1.2rem", marginTop: "0.2rem", fontSize: "0.9rem" }}>
+      {rules.map(({ valid, text }, i) => (
+        <li key={i} style={{ color: valid ? "green" : "red" }}>
+          {text}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
-    <div className="auth-page d-flex align-items-center" style={{marginTop:'100px',marginBottom:'100px'}}>
+    <div className="auth-page d-flex align-items-center" style={{ marginTop: "100px", marginBottom: "100px" }}>
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-lg-10">
             <div className="card shadow-lg border-0 rounded-4 overflow-hidden">
               <div className="row g-0">
-                {/* Left Side - Welcome Section */}
+                {/* Left Side - Welcome */}
                 <div
                   className="col-lg-6 d-flex align-items-center"
                   style={{
@@ -114,20 +172,6 @@ function AuthPage() {
                     <p className="lead mb-4">
                       Your ultimate parking solution. Find, book, and manage your parking spots with ease.
                     </p>
-                    <div className="row text-center">
-                      <div className="col-4">
-                        <div className="h2 fw-bold">24/7</div>
-                        <small>Parking Availability</small>
-                      </div>
-                      <div className="col-4">
-                        <div className="h2 fw-bold">5K+</div>
-                        <small>Happy Users</small>
-                      </div>
-                      <div className="col-4">
-                        <div className="h2 fw-bold">99%</div>
-                        <small>Success Rate</small>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -210,20 +254,6 @@ function AuthPage() {
                         >
                           {loading ? "Logging in..." : "🔓 Login"}
                         </Button>
-
-                        <div className="text-center">
-                          <Button
-                            variant="link"
-                            style={{
-                              color: primaryColor,
-                              textDecoration: "none",
-                              padding: 0,
-                            }}
-                            onClick={() => alert("Forgot password feature coming soon!")}
-                          >
-                            Forgot Password?
-                          </Button>
-                        </div>
                       </Form>
                     ) : (
                       <Form onSubmit={handleSubmit}>
@@ -234,9 +264,15 @@ function AuthPage() {
                             name="username"
                             value={form.username}
                             onChange={handleChange}
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
                             placeholder="Choose a username"
                             required
                           />
+                          {activeField === "username" &&
+                            renderBulletList([
+                              { valid: validation.username, text: "At least 3 characters" },
+                            ])}
                         </Form.Group>
 
                         <Form.Group className="mb-3">
@@ -246,9 +282,15 @@ function AuthPage() {
                             name="email"
                             value={form.email}
                             onChange={handleChange}
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
                             placeholder="Enter your email"
                             required
                           />
+                          {activeField === "email" &&
+                            renderBulletList([
+                              { valid: validation.email, text: "Must be valid email format" },
+                            ])}
                         </Form.Group>
 
                         <Form.Group className="mb-3">
@@ -258,9 +300,18 @@ function AuthPage() {
                             name="password"
                             value={form.password}
                             onChange={handleChange}
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
                             placeholder="Create a password"
                             required
                           />
+                          {activeField === "password" &&
+                            renderBulletList([
+                              { valid: validation.passwordLength, text: "At least 8 characters" },
+                              { valid: validation.passwordUppercase, text: "Contains uppercase letter" },
+                              { valid: validation.passwordNumber, text: "Contains a number" },
+                              { valid: validation.passwordSpecial, text: "Contains special character" },
+                            ])}
                         </Form.Group>
 
                         <Form.Group className="mb-3">
@@ -270,9 +321,15 @@ function AuthPage() {
                             name="confirmPassword"
                             value={form.confirmPassword}
                             onChange={handleChange}
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
                             placeholder="Confirm your password"
                             required
                           />
+                          {activeField === "confirmPassword" &&
+                            renderBulletList([
+                              { valid: validation.confirmPassword, text: "Passwords match" },
+                            ])}
                         </Form.Group>
 
                         <Button

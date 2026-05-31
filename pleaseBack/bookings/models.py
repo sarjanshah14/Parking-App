@@ -20,7 +20,7 @@ class Booking(models.Model):
     premise = models.ForeignKey(Premise, on_delete=models.CASCADE, related_name='bookings')
     name = models.CharField(max_length=255)
     phone = models.CharField(max_length=20)
-    duration = models.PositiveIntegerField(default=1)  # in hours
+    duration = models.PositiveIntegerField(default=1)
     booking_time = models.DateTimeField(auto_now_add=True)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
@@ -29,24 +29,38 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.premise.name}"
-
+    def is_active(self):
+        """Check if booking is currently active (within start and end time)"""
+        now = timezone.now()
+        return self.start_time <= now <= self.end_time
+    
+    def time_remaining(self):
+        """Return seconds remaining for this booking"""
+        now = timezone.now()
+        if now < self.start_time:
+            return (self.start_time - now).total_seconds()
+        elif self.start_time <= now <= self.end_time:
+            return (self.end_time - now).total_seconds()
+        else:
+            return 0  # Booking has ended
     def save(self, *args, **kwargs):
-        # Set start_time to current time if not specified
-        if not self.pk:  # Only for new bookings
+    # Set start_time only for new bookings
+        if not self.pk:
             self.start_time = timezone.now()
-        
-        # Calculate end_time based on start_time and duration
+
+        # Duration is in hours
         self.end_time = self.start_time + timezone.timedelta(hours=self.duration)
-        
+
         # Calculate price
         try:
-            price_str = self.premise.price
+            price_str = self.premise.price  # e.g. "50/hr"
             price_per_hour = int(''.join(filter(str.isdigit, price_str.split('/')[0])))
             self.total_price = price_per_hour * self.duration
         except (ValueError, IndexError, AttributeError):
             self.total_price = 0
-        
+
         super().save(*args, **kwargs)
+
 
 @receiver(post_save, sender=Booking)
 def send_booking_sms(sender, instance, created, **kwargs):

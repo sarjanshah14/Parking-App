@@ -102,6 +102,7 @@ const Book = () => {
   const [selectedCity, setSelectedCity] = useState(state?.selectedCity || null);
   const [selectedPremise, setSelectedPremise] = useState(state?.selectedPremise || null);
   const [loading, setLoading] = useState(true);
+  const [activeBookings, setActiveBookings] = useState([]);
   const [bookingForm, setBookingForm] = useState({
     name: '',
     phone: '',
@@ -131,7 +132,56 @@ const Book = () => {
       markersRef.current[id] = marker;
     }
   }, []);
+  useEffect(() => {
+    const checkActiveBookings = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
 
+        const response = await axios.get(
+          "http://127.0.0.1:8000/api/bookings/bookings/",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        const bookings = response.data;
+        const thirtySecondBookings = bookings.filter(
+          booking =>
+            booking.duration === 0.0083 &&
+            booking.status === 'confirmed'
+        );
+
+        setActiveBookings(thirtySecondBookings);
+
+        // Set timers for each 30-second booking
+        thirtySecondBookings.forEach(booking => {
+          const startTime = new Date(booking.start_time);
+          const endTime = new Date(startTime.getTime() + 30000); // 30 seconds
+
+          const now = new Date();
+          if (now < endTime) {
+            // Booking is still active or hasn't started yet
+            const timeUntilEnd = endTime - now;
+
+            setTimeout(() => {
+              alert(`⏰ Your 30-second booking at ${booking.premise.name} is over!`);
+
+              // Update local state to remove this booking
+              setActiveBookings(prev => prev.filter(b => b.id !== booking.id));
+            }, timeUntilEnd);
+          } else if (now >= endTime) {
+            // Booking has already ended
+            alert(`Your 30-second booking at ${booking.premise.name} has already ended.`);
+          }
+        });
+      } catch (error) {
+        console.error("Error checking active bookings:", error);
+      }
+    };
+
+    checkActiveBookings();
+  }, [showSuccessModal]); // Run when booking is made or modal is closed
   const extractCity = useCallback((location) => {
     if (!location) return 'Other';
     const loc = location.toLowerCase();
@@ -142,10 +192,15 @@ const Book = () => {
 
   const calculateTotalPrice = useCallback(() => {
     if (!selectedPremise?.price) return 0;
-    const pricePerHour = parseFloat(selectedPremise.price.replace(/[^0-9.]/g, ''));
-    const duration = parseInt(bookingForm.duration);
+
+    const pricePerHour = parseFloat(
+      selectedPremise.price.replace(/[^0-9.]/g, "")
+    );
+    const duration = parseFloat(bookingForm.duration); // allow fractional hours
+
     return (pricePerHour * duration).toFixed(2);
   }, [selectedPremise, bookingForm.duration]);
+
 
   const formatPhoneNumber = (value) => {
     if (!value) return value;
@@ -162,17 +217,16 @@ const Book = () => {
   // Function to get minimum datetime for input (current time + 30 minutes)
   const getMinDateTime = () => {
     const now = new Date();
-    now.setMinutes(now.getMinutes() + 30); // Allow booking from 30 minutes from now
     return now.toISOString().slice(0, 16);
   };
 
   // Function to validate date and time
   const validateDateTime = (dateTime) => {
     if (!dateTime) return false;
-    
+
     const selectedDate = new Date(dateTime);
     const now = new Date();
-    
+
     // Check if selected date/time is at least 30 minutes from now
     return selectedDate.getTime() > now.getTime() + 30 * 60 * 1000;
   };
@@ -208,19 +262,18 @@ const Book = () => {
     }
 
     // Duration validation
-    if (!bookingForm.duration || bookingForm.duration < 1 || bookingForm.duration > 8) {
-      newErrors.duration = 'Duration must be between 1-8 hours';
+    if (!bookingForm.duration) {
+      newErrors.duration = 'PLease select a duration';
       valid = false;
     }
 
     // Date and time validation
+    // Date and time validation
     if (!bookingForm.bookingDateTime) {
-      newErrors.bookingDateTime = 'Please select a date and time';
-      valid = false;
-    } else if (!validateDateTime(bookingForm.bookingDateTime)) {
-      newErrors.bookingDateTime = 'Please select a time at least 30 minutes from now';
+      newErrors.bookingDateTime = 'Please select a start time';
       valid = false;
     }
+
 
     setErrors(newErrors);
     return valid;
@@ -270,24 +323,35 @@ const Book = () => {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      alert('Please login to book');
+      alert("Please login to book");
       return;
     }
-
+    console.log({
+      premise: selectedPremise.id,
+      name: bookingForm.name,
+      phone: bookingForm.phone.replace(/\D/g, ''),
+      duration: bookingForm.duration,
+      total_price: calculateTotalPrice(),
+      booking_time: bookingForm.bookingDateTime
+    });
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/bookings/bookings/', {
-        premise_id: selectedPremise.id,
-        name: bookingForm.name,
-        phone: bookingForm.phone.replace(/\D/g, ''), // Remove non-digits
-        duration: bookingForm.duration,
-        total_price: calculateTotalPrice(),
-        booking_time: bookingForm.bookingDateTime
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.post(
+        "http://127.0.0.1:8000/api/bookings/bookings/",
+        {
+          premise_id: selectedPremise.id,
+          name: bookingForm.name,
+          phone: bookingForm.phone.replace(/\D/g, ""), // Remove non-digits
+          duration: bookingForm.duration,
+          total_price: calculateTotalPrice(),
+          booking_time: bookingForm.bookingDateTime,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       // Set success details for modal
       setBookingSuccessDetails({
@@ -296,23 +360,32 @@ const Book = () => {
         duration: bookingForm.duration,
         total: calculateTotalPrice(),
         bookingId: response.data.id,
-        phone: bookingForm.phone.replace(/\D/g, ''),
-        bookingDateTime: bookingForm.bookingDateTime
+        phone: bookingForm.phone.replace(/\D/g, ""),
+        bookingDateTime: bookingForm.bookingDateTime,
       });
 
       setShowSuccessModal(true);
-      setBookingForm({ name: '', phone: '', duration: '1', bookingDateTime: '' });
-      setSelectedPremise(null);
 
+      // ✅ Start 30s timer if duration is 30s (0.0083 hr)
+      if (bookingForm.duration === "1") {
+        setTimeout(() => {
+          alert("⏰ Your 30 seconds are over!");
+          // later: you can auto-release slot here with an API call
+        }, 30000); // 30 sec = 30,000 ms
+      }
+
+      setBookingForm({ name: "", phone: "", duration: "1", bookingDateTime: "" });
+      setSelectedPremise(null);
     } catch (error) {
       if (error.response?.status === 401) {
-        alert('Session expired. Please login again.');
-        localStorage.removeItem('token');
+        alert("Session expired. Please login again.");
+        localStorage.removeItem("token");
       } else {
-        alert(error.response?.data?.error || 'Booking failed');
+        alert(error.response?.data?.error || "Booking failed");
       }
     }
   };
+
 
   const renderPopupContent = useCallback((premise) => (
     <Popup maxWidth={300} minWidth={250} autoPan={true}>
@@ -388,9 +461,11 @@ const Book = () => {
     <>
       <div
         className="d-flex align-items-center justify-content-center text-center text-white bg-primary shadow-lg mb-4"
-        style={{ minHeight: "25vh", width: "100%",backgroundImage: "linear-gradient(135deg,rgb(5, 50, 100) 0%,rgb(56, 130, 194) 100%)", // darker gradient
+        style={{
+          minHeight: "25vh", width: "100%", backgroundImage: "linear-gradient(135deg,rgb(5, 50, 100) 0%,rgb(56, 130, 194) 100%)", // darker gradient
           position: "relative",
-          overflow: "hidden" }}
+          overflow: "hidden"
+        }}
       >
         <div className="px-4">
           <h1 className="display-3 fw-bold">Book Your Spot</h1>
@@ -586,9 +661,9 @@ const Book = () => {
                             <Form.Control
                               type="datetime-local"
                               value={bookingForm.bookingDateTime}
-                              onChange={(e) => setBookingForm({ 
-                                ...bookingForm, 
-                                bookingDateTime: e.target.value 
+                              onChange={(e) => setBookingForm({
+                                ...bookingForm,
+                                bookingDateTime: e.target.value
                               })}
                               isInvalid={!!errors.bookingDateTime}
                               min={getMinDateTime()}
@@ -603,26 +678,35 @@ const Book = () => {
                           </Form.Group>
 
                           <Form.Group className="mb-4">
-                            <Form.Label>Duration (hours)</Form.Label>
+                            <Form.Label>Duration</Form.Label>
                             <Form.Select
                               value={bookingForm.duration}
-                              onChange={(e) => setBookingForm({ ...bookingForm, duration: e.target.value })}
+                              onChange={(e) =>
+                                setBookingForm({ ...bookingForm, duration: e.target.value })
+                              }
                               isInvalid={!!errors.duration}
                               required
                             >
+                              {/* 30 seconds option */}
+                              <option value="0.0083">30 seconds</option>
+
+                              {/* Hours options */}
                               {[1, 2, 3, 4, 5, 6, 7, 8].map((hour) => (
                                 <option key={hour} value={hour}>
-                                  {hour} hour{hour > 1 ? 's' : ''}
+                                  {hour} hour{hour > 1 ? "s" : ""}
                                 </option>
                               ))}
                             </Form.Select>
+
                             <Form.Control.Feedback type="invalid">
                               {errors.duration}
                             </Form.Control.Feedback>
+
                             <div className="mt-2 text-end">
                               <strong>Total: ₹{calculateTotalPrice()}</strong>
                             </div>
                           </Form.Group>
+
 
                           <Button type="submit" variant="primary" className="w-100">
                             Book Now
